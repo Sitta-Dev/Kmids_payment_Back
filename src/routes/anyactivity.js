@@ -16,7 +16,6 @@ const storage = multer.diskStorage({
 });
 
 const filefilter = (req, file, cb) => {
-    //reject a file
     if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png') {
         cb(null, true);
     } else {
@@ -31,6 +30,7 @@ const upload = multer({
     },
     fileFilter: filefilter
 });
+
 
 
 router.post('/anyactivityform', upload.single('imgexam'), checkAuth, async (req, res) => {
@@ -77,7 +77,24 @@ router.post('/anyactivityform', upload.single('imgexam'), checkAuth, async (req,
         });
 });
 
-router.post('/anyactivityNewStudform', upload.single('imgexam'), async (req, res) => {
+const storageCustoms = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, './uploads/forNewStudens/');
+    },
+    filename: function (req, file, cb) {
+        cb(null, file.originalname)
+    }
+});
+
+const uploadCustoms = multer({
+    storage: storageCustoms,
+    limits: {
+        fileSize: 1024 * 1024 * 5
+    },
+    fileFilter: filefilter
+});
+
+router.post('/anyactivityNewStudform', uploadCustoms.single('imgexam', 'foundation_name_autogen'), async (req, res) => {
     /** get time */
     var time = new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
 
@@ -85,9 +102,10 @@ router.post('/anyactivityNewStudform', upload.single('imgexam'), async (req, res
     const nextVal = await pool.query('SELECT MAX(student_id + 1) as student_id FROM kmids_payment.student_kmids');
     const $nextId = JSON.parse(JSON.stringify(nextVal))[0].student_id;
 
-    /** get img path */
-    const img = req.file.path;
-    const img2 = img.split("\\")[1];
+    /** get img Name */
+    const imgPath = req.file.path;
+    const imgSplit = imgPath.split("\\");
+    const imgName = imgSplit[imgSplit.length - 1];
 
     /** set form */
     const anyactivityNewStudform = {
@@ -120,11 +138,8 @@ router.post('/anyactivityNewStudform', upload.single('imgexam'), async (req, res
         amount: req.body.foundation_amount,
         refid1: req.body.foundation_refid1,
         refid2: req.body.foundation_refid1,
-        img: img2,
+        img: imgName,
     }
-
-    // console.log('anyactivityNewStudform : ', anyactivityNewStudform)
-    // console.log('anyactivityFoundationform : ', anyactivityFoundationform)
 
     Promise.all([
         pool.query('INSERT INTO student_kmids set ?', [anyactivityNewStudform]),
@@ -146,6 +161,29 @@ router.post('/anyactivityNewStudform', upload.single('imgexam'), async (req, res
     });
 });
 
+router.post('/autoGenFileName', async (req, res) => {
+    const refID = req.body.refId;
+
+    await pool.query('SELECT img FROM kmids_payment.admission_foundation WHERE LEFT(img, 13) = ' + `${refID}`)
+        .then(result => {
+            var data = refID;
+            if (result.length) {
+                data = `${refID}-${result.length}`;
+            }
+
+            return res.status(200).json({
+                success: true,
+                massage: 'Sucessfuly',
+                data: data
+            });
+        }).catch(error => {
+            if (error) {
+                res.status(404).json({
+                    massage: error
+                });
+            }
+        });
+});
 
 router.post('/parent/anyactivity', checkAuth, async (req, res) => {
     const studentid = req.body.studentid;
